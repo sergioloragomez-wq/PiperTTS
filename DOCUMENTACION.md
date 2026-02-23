@@ -107,8 +107,11 @@ db_host=localhost
 db_port=3306
 db_name=asterisk
 db_user=cron
+# ⚠️ IMPORTANTE: Cambie esta contraseña por una segura en producción
 db_pass=1234
 ```
+
+**NOTA DE SEGURIDAD**: La contraseña por defecto (1234) es solo para propósitos de ejemplo. En un entorno de producción, debe usar una contraseña fuerte y segura.
 
 La tabla `stt_transcriptions` se crea automáticamente.
 
