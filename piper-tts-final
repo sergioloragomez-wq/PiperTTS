@@ -1,0 +1,155 @@
+#!/bin/bash
+#
+# PIPER TTS - Versión Final Optimizada para Vicidial
+# Compatible con tu configuración específica
+#
+
+# ==========================================
+# CONFIGURACIÓN
+# ==========================================
+PIPER_BIN="/usr/local/bin/piper"
+MODEL="/opt/piper-tts/models/es_MX-claude-high.onnx"
+CONVERTER="/opt/piper-tts/scripts/convertir_numeros_mx.py"
+SOX_BIN="/usr/bin/sox"
+
+CACHE_DIR="/var/lib/asterisk/sounds/piper/cache"
+LOG_FILE="/var/log/asterisk/piper-tts.log"
+
+SAMPLE_RATE="8000"
+CHANNELS="1"
+
+export PATH="/usr/local/bin:$PATH"
+export LD_LIBRARY_PATH="/usr/local/lib/piper:$LD_LIBRARY_PATH"
+export PIPER_PHONEMIZE_ESPEAK_DATA="/usr/share/espeak-ng-data"
+
+# ==========================================
+# FUNCIONES
+# ==========================================
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>&1
+}
+
+# Crear directorios
+mkdir -p "$CACHE_DIR" 2>/dev/null
+
+# ==========================================
+# LEER VARIABLES AGI
+# ==========================================
+log_msg "===== INICIO ====="
+
+while read -r line; do
+    [ -z "$line" ] && break
+    log_msg "AGI: $line"
+done
+
+log_msg "Variables AGI leídas"
+
+# ==========================================
+# OBTENER Y LIMPIAR TEXTO
+# ==========================================
+TEXT="$1"
+
+if [ -z "$TEXT" ]; then
+    log_msg "ERROR: Sin texto"
+    echo "VERBOSE \"Piper-TTS: Sin texto\" 1" >&1
+    exit 1
+fi
+
+log_msg "Texto recibido: $TEXT"
+
+# ==========================================
+# CONVERTIR NÚMEROS A PALABRAS
+# ==========================================
+if [ -f "$CONVERTER" ]; then
+    TEXT_CONV=$(python3 "$CONVERTER" "$TEXT" 2>/dev/null)
+    if [ $? -eq 0 ] && [ -n "$TEXT_CONV" ]; then
+        TEXT="$TEXT_CONV"
+        log_msg "Texto convertido: $TEXT"
+    fi
+fi
+
+# ==========================================
+# LIMPIAR TEXTO
+# ==========================================
+# Remover ++ y limpiar espacios
+TEXT=$(echo "$TEXT" | sed 's/+/ /g' | tr -d '\r\n\t' | sed 's/  */ /g' | sed 's/^ *//g' | sed 's/ *$//g')
+
+log_msg "Texto final (limpio): $TEXT"
+
+# Validar que el texto no esté vacío
+if [ -z "$TEXT" ]; then
+    log_msg "ERROR: Texto vacío después de limpieza"
+    exit 1
+fi
+
+# ==========================================
+# GENERAR HASH Y VERIFICAR CACHE
+# ==========================================
+HASH=$(echo -n "$TEXT" | md5sum | cut -d' ' -f1)
+AUDIO_FILE="${CACHE_DIR}/piper_${HASH}"
+
+log_msg "Hash: $HASH"
+log_msg "Archivo: ${AUDIO_FILE}.wav"
+
+# ==========================================
+# GENERAR AUDIO SI NO EXISTE
+# ==========================================
+if [ ! -f "${AUDIO_FILE}.wav" ]; then
+    log_msg "Generando audio nuevo..."
+    
+    # Generar audio con Piper TTS
+    echo "$TEXT" | "$PIPER_BIN" \
+        --model "$MODEL" \
+        --output_file "${AUDIO_FILE}_temp.wav" \
+        2>>"$LOG_FILE"
+    
+    if [ $? -ne 0 ] || [ ! -f "${AUDIO_FILE}_temp.wav" ]; then
+        log_msg "ERROR: Piper TTS falló"
+        exit 1
+    fi
+    
+    # Convertir a formato telefónico con SOX
+    "$SOX_BIN" "${AUDIO_FILE}_temp.wav" \
+        -r "$SAMPLE_RATE" \
+        -c "$CHANNELS" \
+        "${AUDIO_FILE}.wav" \
+        2>>"$LOG_FILE"
+    
+    SOX_EXIT=$?
+    
+    # Limpiar archivo temporal
+    rm -f "${AUDIO_FILE}_temp.wav"
+    
+    if [ $SOX_EXIT -ne 0 ] || [ ! -f "${AUDIO_FILE}.wav" ]; then
+        log_msg "ERROR: SOX falló (código: $SOX_EXIT)"
+        exit 1
+    fi
+    
+    FILE_SIZE=$(stat -c%s "${AUDIO_FILE}.wav" 2>/dev/null || stat -f%z "${AUDIO_FILE}.wav" 2>/dev/null)
+    log_msg "Audio generado OK ($FILE_SIZE bytes)"
+else
+    FILE_SIZE=$(stat -c%s "${AUDIO_FILE}.wav" 2>/dev/null || stat -f%z "${AUDIO_FILE}.wav" 2>/dev/null)
+    log_msg "Audio en caché ($FILE_SIZE bytes)"
+fi
+
+# ==========================================
+# REPRODUCIR AUDIO
+# ==========================================
+log_msg "Reproduciendo: ${AUDIO_FILE}"
+
+# Usar STREAM FILE (compatible con tu sistema)
+echo "STREAM FILE $AUDIO_FILE \"\"" >&1
+read -r response
+
+log_msg "Respuesta: $response"
+
+# Verificar respuesta (200 result=... indica éxito)
+if echo "$response" | grep -q "^200"; then
+    log_msg "Audio reproducido exitosamente"
+    log_msg "===== FIN OK ====="
+    exit 0
+else
+    log_msg "ERROR: Fallo en reproducción - $response"
+    log_msg "===== FIN ERROR ====="
+    exit 1
+fi
