@@ -1,0 +1,449 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+"""
+Convertidor de Números a Texto en Español Mexicano
+Para uso con Piper TTS en Vicidial
+
+Convierte:
+- Cantidades de dinero: $5,000.50 → cinco mil pesos con cincuenta centavos
+- Números generales: 123 → ciento veintitrés
+- Fechas: día 15 → día quince
+- Ordinales: 1° → primero
+
+Autor: Sistema Vicidial
+Versión: 1.0
+Compatible con Python 3.6+
+"""
+
+import re
+import sys
+
+# ==========================================
+# DICCIONARIOS DE CONVERSIÓN
+# ==========================================
+
+UNIDADES = [
+    '', 'uno', 'dos', 'tres', 'cuatro', 
+    'cinco', 'seis', 'siete', 'ocho', 'nueve'
+]
+
+DIEZ_DIECINUEVE = [
+    'diez', 'once', 'doce', 'trece', 'catorce', 
+    'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'
+]
+
+DECENAS = [
+    '', '', 'veinte', 'treinta', 'cuarenta', 
+    'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'
+]
+
+CIENTOS = [
+    '', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos',
+    'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'
+]
+
+MESES = {
+    'enero': 'enero', 'febrero': 'febrero', 'marzo': 'marzo',
+    'abril': 'abril', 'mayo': 'mayo', 'junio': 'junio',
+    'julio': 'julio', 'agosto': 'agosto', 'septiembre': 'septiembre',
+    'octubre': 'octubre', 'noviembre': 'noviembre', 'diciembre': 'diciembre'
+}
+
+# ==========================================
+# FUNCIÓN PRINCIPAL DE CONVERSIÓN
+# ==========================================
+
+def numero_a_texto(num):
+    """
+    Convierte un número entero a texto en español mexicano
+    
+    Args:
+        num: Número entero o string que representa un número
+        
+    Returns:
+        str: Representación en texto del número
+    
+    Ejemplos:
+        numero_a_texto(5) → "cinco"
+        numero_a_texto(25) → "veinticinco"
+        numero_a_texto(100) → "cien"
+        numero_a_texto(1000) → "mil"
+    """
+    # Validar y convertir entrada
+    try:
+        num = int(num)
+    except (ValueError, TypeError):
+        return str(num)
+    
+    # Caso especial: cero
+    if num == 0:
+        return "cero"
+    
+    # Números negativos
+    if num < 0:
+        return "menos " + numero_a_texto(abs(num))
+    
+    # Unidades (1-9)
+    if num < 10:
+        return UNIDADES[num]
+    
+    # Diez a diecinueve
+    if 10 <= num < 20:
+        return DIEZ_DIECINUEVE[num - 10]
+    
+    # Veinte exacto
+    if num == 20:
+        return "veinte"
+    
+    # Veintiuno a veintinueve (veintiuno, veintidós, etc.)
+    if 21 <= num < 30:
+        return "veinti" + UNIDADES[num - 20]
+    
+    # Treinta a noventa y nueve
+    if num < 100:
+        decena = num // 10
+        unidad = num % 10
+        if unidad == 0:
+            return DECENAS[decena]
+        return DECENAS[decena] + " y " + UNIDADES[unidad]
+    
+    # Cien exacto
+    if num == 100:
+        return "cien"
+    
+    # Ciento uno a novecientos noventa y nueve
+    if num < 1000:
+        centena = num // 100
+        resto = num % 100
+        if resto == 0:
+            return CIENTOS[centena]
+        return CIENTOS[centena] + " " + numero_a_texto(resto)
+    
+    # Mil exacto
+    if num == 1000:
+        return "mil"
+    
+    # Miles (1,001 a 999,999)
+    if num < 1000000:
+        miles = num // 1000
+        resto = num % 1000
+        
+        if miles == 1:
+            texto = "mil"
+        else:
+            texto = numero_a_texto(miles) + " mil"
+        
+        if resto > 0:
+            texto += " " + numero_a_texto(resto)
+        return texto
+    
+    # Un millón exacto
+    if num == 1000000:
+        return "un millón"
+    
+    # Millones (1,000,001 a 999,999,999)
+    if num < 1000000000:
+        millones = num // 1000000
+        resto = num % 1000000
+        
+        if millones == 1:
+            texto = "un millón"
+        else:
+            texto = numero_a_texto(millones) + " millones"
+        
+        if resto > 0:
+            texto += " " + numero_a_texto(resto)
+        return texto
+    
+    # Mil millones (billón americano)
+    if num < 1000000000000:
+        miles_millones = num // 1000000000
+        resto = num % 1000000000
+        
+        if miles_millones == 1:
+            texto = "mil millones"
+        else:
+            texto = numero_a_texto(miles_millones) + " mil millones"
+        
+        if resto > 0:
+            texto += " " + numero_a_texto(resto)
+        return texto
+    
+    # Para números muy grandes, devolver como string
+    return str(num)
+
+# ==========================================
+# CONVERSIÓN DE DINERO
+# ==========================================
+
+def convertir_pesos(cantidad_str):
+    """
+    Convierte cantidades de dinero a texto coloquial mexicano
+    
+    Args:
+        cantidad_str: Cantidad en formato string (puede incluir $, comas, decimales)
+        
+    Returns:
+        str: Cantidad en texto con formato mexicano
+    
+    Ejemplos:
+        convertir_pesos("5000") → "cinco mil pesos"
+        convertir_pesos("$5,000.50") → "cinco mil pesos con cincuenta centavos"
+        convertir_pesos("1") → "un peso"
+        convertir_pesos("1.01") → "un peso con un centavo"
+    """
+    try:
+        # Limpiar formato: quitar $, comas, espacios
+        cantidad_limpia = str(cantidad_str)
+        cantidad_limpia = cantidad_limpia.replace('$', '')
+        cantidad_limpia = cantidad_limpia.replace(',', '')
+        cantidad_limpia = cantidad_limpia.replace(' ', '')
+        cantidad_limpia = cantidad_limpia.strip()
+        
+        # Separar pesos y centavos
+        if '.' in cantidad_limpia:
+            partes = cantidad_limpia.split('.')
+            pesos = int(partes[0])
+            # Asegurar dos dígitos para centavos y redondear
+            centavos_str = partes[1].ljust(2, '0')[:2]
+            centavos = int(centavos_str)
+        else:
+            pesos = int(cantidad_limpia)
+            centavos = 0
+        
+        # Construir texto para pesos
+        texto = numero_a_texto(pesos)
+        
+        # Agregar "peso" o "pesos"
+        if pesos == 1:
+            texto += " peso"
+        else:
+            texto += " pesos"
+        
+        # Agregar centavos si existen
+        if centavos > 0:
+            texto += " con " + numero_a_texto(centavos)
+            if centavos == 1:
+                texto += " centavo"
+            else:
+                texto += " centavos"
+        
+        return texto
+    
+    except (ValueError, IndexError, AttributeError):
+        # Si hay algún error, devolver el original
+        return str(cantidad_str)
+
+# ==========================================
+# CONVERSIÓN DE FECHAS
+# ==========================================
+
+def convertir_dia(dia_str):
+    """
+    Convierte día del mes a formato coloquial
+    
+    Args:
+        dia_str: Día como string o número
+        
+    Returns:
+        str: Día en texto (primero, dos, tres, etc.)
+    
+    Ejemplos:
+        convertir_dia("1") → "primero"
+        convertir_dia("15") → "quince"
+    """
+    try:
+        dia_num = int(dia_str)
+        if dia_num == 1:
+            return "primero"
+        else:
+            return numero_a_texto(dia_num)
+    except (ValueError, TypeError):
+        return str(dia_str)
+
+def convertir_ordinal(num_str):
+    """
+    Convierte números ordinales simples
+    
+    Args:
+        num_str: Número como string
+        
+    Returns:
+        str: Ordinal en texto
+    
+    Ejemplos:
+        convertir_ordinal("1") → "primero"
+        convertir_ordinal("2") → "segundo"
+        convertir_ordinal("3") → "tercero"
+    """
+    ordinales = {
+        1: "primero", 2: "segundo", 3: "tercero", 4: "cuarto",
+        5: "quinto", 6: "sexto", 7: "séptimo", 8: "octavo",
+        9: "noveno", 10: "décimo"
+    }
+    
+    try:
+        num = int(num_str)
+        return ordinales.get(num, numero_a_texto(num))
+    except (ValueError, TypeError):
+        return str(num_str)
+
+# ==========================================
+# PROCESAMIENTO DE TEXTO COMPLETO
+# ==========================================
+
+def procesar_texto(texto):
+    """
+    Procesa texto completo convirtiendo números, cantidades, fechas y ordinales
+    
+    Args:
+        texto: Texto a procesar
+        
+    Returns:
+        str: Texto con números convertidos a palabras
+    
+    Ejemplos:
+        procesar_texto("Debe $5,000 pesos") → "Debe cinco mil pesos"
+        procesar_texto("Su cita es el día 15") → "Su cita es el día quince"
+    """
+    
+    # 1. Convertir cantidades con símbolo de pesos ($)
+    texto = re.sub(
+        r'\$\s*(\d+(?:,\d{3})*(?:\.\d{1,2})?)',
+        lambda m: convertir_pesos(m.group(1)),
+        texto
+    )
+    
+    # 2. Convertir cantidades seguidas de "pesos", "peso" o "MXN"
+    # IMPORTANTE: Captura números de cualquier longitud, no solo 1-3 dígitos
+    texto = re.sub(
+        r'(\d+(?:,\d{3})*(?:\.\d{1,2})?)\s*(?:pesos?|MXN)',
+        lambda m: convertir_pesos(m.group(1)),
+        texto,
+        flags=re.IGNORECASE
+    )
+    
+    # 3. Convertir "día X" (fechas)
+    texto = re.sub(
+        r'\bdía\s+(\d+)',
+        lambda m: "día " + convertir_dia(m.group(1)),
+        texto,
+        flags=re.IGNORECASE
+    )
+    
+    # 4. Convertir fechas completas (X de mes)
+    texto = re.sub(
+        r'\b(\d+)\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)',
+        lambda m: convertir_dia(m.group(1)) + " de " + m.group(2),
+        texto,
+        flags=re.IGNORECASE
+    )
+    
+    # 5. Convertir ordinales simples (1°, 2°, etc.)
+    texto = re.sub(
+        r'\b(\d+)[°º]',
+        lambda m: convertir_ordinal(m.group(1)),
+        texto
+    )
+    
+    # 6. Convertir porcentajes
+    texto = re.sub(
+        r'(\d+)\s*%',
+        lambda m: numero_a_texto(int(m.group(1))) + " por ciento",
+        texto
+    )
+    
+    # 7. NO convertir números de teléfono ni decimales
+    
+    # 8. Convertir números generales
+    def convertir_numero_general(match):
+        num_str = match.group(0)
+        
+        # Si tiene coma como separador de miles (1,000,000)
+        if ',' in num_str and '.' not in num_str:
+            # Verificar que las comas están en posiciones correctas (cada 3 dígitos)
+            partes = num_str.split(',')
+            # Primera parte puede tener 1-3 dígitos, resto deben ser exactamente 3
+            if len(partes[0]) <= 3 and all(len(p) == 3 for p in partes[1:]):
+                num_str_limpio = num_str.replace(',', '')
+                try:
+                    num = int(num_str_limpio)
+                    return numero_a_texto(num)
+                except ValueError:
+                    return num_str
+            # Si las comas no están bien posicionadas, no es separador de miles
+            return num_str
+        
+        # Número simple sin formato especial
+        try:
+            num = int(num_str)
+        except ValueError:
+            return num_str
+        
+        # No convertir números muy largos (más de 9 dígitos - probablemente IDs)
+        if len(num_str) > 9:
+            return num_str
+        
+        # No convertir años (1900-2099)
+        if 1900 <= num <= 2099:
+            return num_str
+        
+        return numero_a_texto(num)
+    
+    # Paso 1: Convertir números con formato de miles (1,000 o 1,000,000)
+    # Solo si tienen el formato correcto de separadores cada 3 dígitos
+    texto = re.sub(
+        r'\b\d{1,3}(?:,\d{3})+\b(?!\s*(?:pesos?|MXN|°|º|%|\.))',
+        convertir_numero_general,
+        texto,
+        flags=re.IGNORECASE
+    )
+    
+    # Paso 2: Convertir números simples (sin comas ni puntos, hasta 9 dígitos)
+    # IMPORTANTE: Usar negative lookbehind y lookahead para evitar decimales
+    texto = re.sub(
+        r'(?<![,.])\b(\d{1,9})\b(?![,.]|\s*(?:pesos?|MXN|°|º|%))',
+        convertir_numero_general,
+        texto,
+        flags=re.IGNORECASE
+    )
+    
+    return texto
+
+# ==========================================
+# FUNCIÓN PRINCIPAL
+# ==========================================
+
+def main():
+    """
+    Función principal para uso desde línea de comandos
+    
+    Uso:
+        python3 convertir_numeros_mx.py "texto con números"
+        echo "texto con números" | python3 convertir_numeros_mx.py
+    """
+    # Leer texto de argumentos o stdin
+    if len(sys.argv) > 1:
+        # Texto viene como argumentos
+        texto_original = ' '.join(sys.argv[1:])
+    else:
+        # Leer de stdin
+        texto_original = sys.stdin.read().strip()
+    
+    # Validar que hay texto
+    if not texto_original:
+        print("Error: No se proporcionó texto", file=sys.stderr)
+        print("Uso: python3 convertir_numeros_mx.py \"texto con números\"", file=sys.stderr)
+        print("  o: echo \"texto\" | python3 convertir_numeros_mx.py", file=sys.stderr)
+        sys.exit(1)
+    
+    # Procesar y mostrar resultado
+    texto_procesado = procesar_texto(texto_original)
+    print(texto_procesado)
+
+# ==========================================
+# PUNTO DE ENTRADA
+# ==========================================
+
+if __name__ == '__main__':
+    main()
