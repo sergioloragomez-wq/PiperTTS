@@ -63,8 +63,7 @@ echo "Installing configuration..."
 mkdir -p /etc/asterisk/stt
 cp config/stt_config.ini /etc/asterisk/stt/
 
-# Update config paths
-sed -i "s|/home/runner/work/PiperTTS/PiperTTS/config/stt_config.ini|/etc/asterisk/stt/stt_config.ini|g" /var/lib/asterisk/agi-bin/vicidial_stt.py
+# Update model path in config
 sed -i "s|/var/lib/asterisk/models/vosk-model-es-0.42|$MODEL_DIR/vosk-model-small-es-0.42|g" /etc/asterisk/stt/stt_config.ini
 
 # Set permissions

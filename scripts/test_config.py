@@ -43,8 +43,7 @@ def test_config():
     
     config_paths = [
         '/etc/asterisk/stt/stt_config.ini',
-        'config/stt_config.ini',
-        '/home/runner/work/PiperTTS/PiperTTS/config/stt_config.ini'
+        'config/stt_config.ini'
     ]
     
     config = None
@@ -117,8 +116,7 @@ def test_model():
         config = ConfigParser()
         config_paths = [
             '/etc/asterisk/stt/stt_config.ini',
-            'config/stt_config.ini',
-            '/home/runner/work/PiperTTS/PiperTTS/config/stt_config.ini'
+            'config/stt_config.ini'
         ]
         
         for path in config_paths:

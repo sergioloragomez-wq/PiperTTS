@@ -31,7 +31,7 @@ except ImportError:
 class VicidialSTT:
     """Vicidial Speech-to-Text Handler"""
     
-    def __init__(self, config_path='/home/runner/work/PiperTTS/PiperTTS/config/stt_config.ini'):
+    def __init__(self, config_path='/etc/asterisk/stt/stt_config.ini'):
         """Initialize STT handler with configuration"""
         self.config = ConfigParser()
         self.config.read(config_path)
@@ -158,7 +158,7 @@ class VicidialSTT:
             if not self.config.getboolean('vicidial', 'keep_recordings', fallback=False):
                 try:
                     os.remove(audio_file)
-                except:
+                except OSError:
                     pass
                     
         except Exception as e:
