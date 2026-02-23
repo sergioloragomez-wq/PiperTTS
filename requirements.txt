@@ -1,0 +1,22 @@
+# Python dependencies for STT Vicidial integration
+
+# Core STT library
+SpeechRecognition>=3.10.0
+
+# Audio processing
+pydub>=0.25.1
+
+# Google Cloud Speech API
+google-cloud-speech>=2.20.0
+
+# OpenAI Whisper (local STT)
+openai-whisper>=20231117
+
+# Database connector
+PyMySQL>=1.1.0
+
+# Additional dependencies for audio handling
+pyaudio>=0.2.13
+
+# For audio file format conversion
+ffmpeg-python>=0.2.0
